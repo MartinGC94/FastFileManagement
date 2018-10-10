@@ -1,8 +1,6 @@
 # FastFileManagement
 
-Get-ChildItem is a general purpose cmdlet that works with non filesystem providers like the registry.
-
-Get-ChildItemFast is a faster alternative made specifically for grabbing the same information that Get-ChildItem does for the filesystem.
+FastFileManagement is a Powershell module written in C#, currently it only contains the "Get-ChildItemFast" cmdlet which is a faster but more limited version of Get-ChildItem (Only works on filesystems, doesn't have some of the switches that filters out certain attributes, warnings instead of error exceptions.)
 
 Comparison:
 
@@ -34,5 +32,4 @@ TotalSeconds      : 11,8896812
 TotalMilliseconds : 11889,6812
 ```
 
-For now it lacks some of the features that Get-ChildItem has like only showing files with specific attributes, or filtering out hidden files
-but the returned data should be identical.
+Other cmdlets I've thought about making for this module include Copy/Move-ItemFast, and maybe Remove-ItemFast, but it depends on how much speed there is to gain by writing my own versions of them.
