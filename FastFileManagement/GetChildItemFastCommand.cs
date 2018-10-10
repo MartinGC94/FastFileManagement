@@ -6,18 +6,37 @@ using System.Management.Automation;
 
 namespace FastFileManagement
 {
-    [Cmdlet(VerbsCommon.Get, "ChildItemFast")]
+    [Cmdlet(VerbsCommon.Get, "ChildItemFast",DefaultParameterSetName = PathParameterSet)]
     [OutputType(typeof(FileSystemInfo))]
 
-    public sealed class GetChildItemFastCommand : Cmdlet
+    public sealed class GetChildItemFastCommand : PSCmdlet
     {
         private readonly char pathSeparator = System.IO.Path.DirectorySeparatorChar;
         private ScanType scanType = ScanType.FilesAndFolders;
+        private const string LiteralParamSet = "Literal";
+        private const string PathParameterSet = "Path";
+        private bool _shouldExpandWildcards;
+        private string[] _paths = new string[] {@".\"};
 
         #region parameters
-        [Parameter(Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true)]
-        [ValidateNotNullOrEmpty()]
-        public string[] Path { get; set; } = new string[] {".\\"};
+        [Parameter(Position = 0, ValueFromPipeline = true, ValueFromPipelineByPropertyName = true, ParameterSetName = PathParameterSet)]
+        [ValidateNotNullOrEmpty]
+        public string[] Path
+        {
+            get { return _paths; }
+            set
+            {
+                _shouldExpandWildcards = true;
+                _paths = value;
+            }
+        }
+        [Parameter(Position = 0, ValueFromPipeline = false, ValueFromPipelineByPropertyName = true, ParameterSetName = LiteralParamSet)]
+        [ValidateNotNullOrEmpty]
+        public string[] LiteralPath
+        {
+            get { return _paths; }
+            set { _paths = value; }
+        }
 
         [Parameter(Mandatory = false, Position = 1)]
         public string Filter { get; set; } = "*";
@@ -57,7 +76,33 @@ namespace FastFileManagement
         }
         protected override void ProcessRecord()
         {
-            List<string> foldersToScan = Path.ToList();
+            #region resolve paths from input and write out file objects for any input paths that points to a file.
+            List<string> resolvedPaths = new List<string>();
+            foreach (string rawPath in _paths)
+            {
+                if (_shouldExpandWildcards==true)
+                {
+                    resolvedPaths.AddRange(GetResolvedProviderPathFromPSPath(rawPath, out ProviderInfo provider));
+                }
+                else
+                {
+                    resolvedPaths.Add(GetUnresolvedProviderPathFromPSPath(rawPath));
+                }
+            }
+            List<string> foldersToScan = new List<string>();
+            foreach (string resolvedPath in resolvedPaths)
+            {
+                if (File.Exists(resolvedPath))
+                {
+                    WriteObject(new FileInfo(resolvedPath));
+                }
+                else
+                {
+                    foldersToScan.Add(resolvedPath);
+                }
+            }
+            #endregion
+
             if (Recurse == true)
             {
                 int newDepth = 0;
@@ -65,13 +110,13 @@ namespace FastFileManagement
                 {
                     string folder = foldersToScan.First();
 
-                    if (Depth > 0 && Path.Contains(folder))
+                    if (Depth > 0 && resolvedPaths.Contains(folder))
                     {
                         newDepth = folder.Trim(pathSeparator).Split(pathSeparator).Count() + Depth;
                     }
                     try
                     {
-                        var subFolders = Directory.EnumerateDirectories(folder, Filter, SearchOption.TopDirectoryOnly);
+                        var subFolders = Directory.EnumerateDirectories(folder,"*", SearchOption.TopDirectoryOnly);
                         if (newDepth > 0)
                         {
                             subFolders = subFolders.Where(sf => sf.Trim(pathSeparator).Split(pathSeparator).Count() <= newDepth);
@@ -82,6 +127,11 @@ namespace FastFileManagement
                             WriteObject(item);
                         }
                     }
+                    //Makes the cmdlet stop properly when the pipeline is stopped by Select-Object -first X
+                    catch (PipelineStoppedException e)
+                    {
+                        throw e;
+                    }
                     catch
                     {
                         WriteWarning("Could not scan folder contents of: " + folder);
@@ -91,11 +141,23 @@ namespace FastFileManagement
             }
             else
             {
-                foreach (String directory in foldersToScan)
+                foreach (string directory in foldersToScan)
                 {
-                    foreach (var item in ScanDirectory(directory, scanType, PathsOnly, Filter))
+                    try
                     {
-                        WriteObject(item);
+                        foreach (var item in ScanDirectory(directory, scanType, PathsOnly, Filter))
+                        {
+                            WriteObject(item);
+                        }
+                    }
+                    //Makes the cmdlet stop properly when the pipeline is stopped by Select-Object -first X
+                    catch (PipelineStoppedException e)
+                    {
+                        throw e;
+                    }
+                    catch 
+                    {
+                        WriteWarning("Could not scan folder contents of: " + directory);
                     }
                 }
             }
