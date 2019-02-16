@@ -61,17 +61,17 @@ namespace FastFileManagement
 
         protected override void BeginProcessing()
         {
-            if (ExcludeFiles == false && ExcludeDirectories == false)
+            if (ExcludeDirectories==true && ExcludeFiles==true)
             {
-                scanType = ScanType.FilesAndFolders;
+                ThrowTerminatingError(new ErrorRecord(new PSArgumentException("You cannot exclude both files and directories"), "ExcludeEveryResultType", ErrorCategory.InvalidArgument, this));
             }
-            else if (!ExcludeFiles)
-            {
-                scanType = ScanType.FilesOnly;
-            }
-            else if (!ExcludeDirectories)
+            else if (ExcludeFiles==true)
             {
                 scanType = ScanType.FoldersOnly;
+            }
+            else if (ExcludeDirectories==true)
+            {
+                scanType = ScanType.FilesOnly;
             }
         }
         protected override void ProcessRecord()
